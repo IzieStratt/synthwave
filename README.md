@@ -34,6 +34,21 @@ about 20 MB of memory and around 1% CPU while it animates.
 
 ## Install
 
+One command sets up everything: mpv (through Homebrew, apt, dnf, pacman, zypper, Scoop or winget),
+[uv](https://docs.astral.sh/uv/), yt-dlp and synthwave. Run it again any time to update.
+
+```sh
+# macOS and Linux
+curl -fsSL https://raw.githubusercontent.com/JosTheDude/synthwave/main/install.sh | sh
+```
+
+```powershell
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/JosTheDude/synthwave/main/install.ps1 | iex
+```
+
+### By hand
+
 You need [mpv](https://mpv.io), [yt-dlp](https://github.com/yt-dlp/yt-dlp) and Python 3.9+, with
 `mpv` and `yt-dlp` on your PATH. It runs on macOS, Linux and Windows. Install those first, then
 synthwave itself with [uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io):
@@ -46,13 +61,13 @@ synthwave
 
 From a clone: `uv tool install --editable .`, or run it in place with `python3 -m synthwave`.
 
-### macOS
+#### macOS
 
 ```sh
 brew install mpv yt-dlp uv
 ```
 
-### Linux
+#### Linux
 
 YouTube changes often, and distro `yt-dlp` packages (Debian and Ubuntu especially) can lag far
 enough behind to stop working. If a station says "stream unavailable", install yt-dlp with
@@ -76,7 +91,7 @@ sudo zypper install mpv yt-dlp python3-pipx
 On any distro, `curl -LsSf https://astral.sh/uv/install.sh | sh` installs uv. With pipx, run
 `pipx ensurepath` once so `synthwave` lands on your PATH.
 
-### Windows
+#### Windows
 
 With [Scoop](https://scoop.sh):
 
