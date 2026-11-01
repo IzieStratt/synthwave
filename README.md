@@ -1,7 +1,7 @@
 # synthwave
 
 A tiny, vibey terminal radio for [Lofi Girl](https://www.youtube.com/@LofiGirl)'s live streams.
-One small Python package with no dependencies beyond the standard library. The app itself uses
+One small Python package with no dependencies beyond the standard library (plus curses on Windows). The app itself uses
 about 20 MB of memory and around 1% CPU while it animates.
 
 ```
@@ -34,16 +34,62 @@ about 20 MB of memory and around 1% CPU while it animates.
 
 ## Install
 
-You need [mpv](https://mpv.io) and [yt-dlp](https://github.com/yt-dlp/yt-dlp) on your PATH, and Python 3.9+.
-It runs on macOS and Linux.
+You need [mpv](https://mpv.io), [yt-dlp](https://github.com/yt-dlp/yt-dlp) and Python 3.9+, with
+`mpv` and `yt-dlp` on your PATH. It runs on macOS, Linux and Windows. Install those first, then
+synthwave itself with [uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io):
 
 ```sh
-brew install mpv yt-dlp        # or your distro's package manager
-uv tool install git+https://github.com/JosTheDude/synthwave   # or: pipx install git+https://github.com/JosTheDude/synthwave
+uv tool install git+https://github.com/JosTheDude/synthwave
+# or: pipx install git+https://github.com/JosTheDude/synthwave
 synthwave
 ```
 
 From a clone: `uv tool install --editable .`, or run it in place with `python3 -m synthwave`.
+
+### macOS
+
+```sh
+brew install mpv yt-dlp uv
+```
+
+### Linux
+
+YouTube changes often, and distro `yt-dlp` packages (Debian and Ubuntu especially) can lag far
+enough behind to stop working. If a station says "stream unavailable", install yt-dlp with
+`uv tool install yt-dlp` (or `pipx install yt-dlp`) instead and keep it fresh with
+`uv tool upgrade yt-dlp`.
+
+```sh
+# Debian, Ubuntu, Mint, Pop!_OS
+sudo apt install mpv pipx && pipx install yt-dlp
+
+# Fedora
+sudo dnf install mpv yt-dlp pipx
+
+# Arch, Manjaro, EndeavourOS
+sudo pacman -S mpv yt-dlp uv
+
+# openSUSE
+sudo zypper install mpv yt-dlp python3-pipx
+```
+
+On any distro, `curl -LsSf https://astral.sh/uv/install.sh | sh` installs uv. With pipx, run
+`pipx ensurepath` once so `synthwave` lands on your PATH.
+
+### Windows
+
+With [Scoop](https://scoop.sh):
+
+```powershell
+scoop bucket add extras
+scoop install python mpv yt-dlp uv
+uv tool install git+https://github.com/JosTheDude/synthwave
+synthwave
+```
+
+On Windows synthwave also installs [windows-curses](https://pypi.org/project/windows-curses/),
+since Windows Python has no curses of its own. Use Windows Terminal for colors and the visualizer's
+block characters. Clicking the new-quote button doesn't work there; press `n` instead.
 
 ## Keys
 
@@ -61,7 +107,7 @@ These are the defaults; every one of them can be changed in settings.
 | `q` | quit |
 
 `enter` (play now, skipping the countdown) and `1`–`8` (jump to a station) always work and
-can't be rebound. Clicking needs mouse reporting, which most terminals have on. In Warp it's a
+can't be rebound. Clicking needs mouse reporting, which most terminals have on (not on Windows). In Warp it's a
 setting. While synthwave is open, hold Shift (Option in iTerm2) to select text.
 
 ## Settings

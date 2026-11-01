@@ -33,7 +33,8 @@ MENU_WIDTH = 46
 def setup():
     curses.curs_set(0)
     curses.use_default_colors()
-    curses.set_escdelay(25)  # a bare Esc shouldn't take a second to register
+    if hasattr(curses, "set_escdelay"):  # not in Windows' PDCurses, where Esc is instant anyway
+        curses.set_escdelay(25)  # a bare Esc shouldn't take a second to register
     mouse(True)
 
 
@@ -50,7 +51,10 @@ def apply_theme(station):
 
 def mouse(on):
     # SGR clicks (1006), parsed by on_button: the system curses on macOS only understands the old X10
-    # format, which some terminals (Warp) don't send and which breaks past column 223
+    # format, which some terminals (Warp) don't send and which breaks past column 223.
+    # Windows' PDCurses reads console events, not escape sequences, so clicking is off there.
+    if sys.platform == "win32":
+        return
     sys.stdout.write(f"\x1b[?1000;1006{'h' if on else 'l'}")
     sys.stdout.flush()
 
