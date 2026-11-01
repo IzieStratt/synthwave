@@ -33,8 +33,9 @@ class Mpv:
         for i, prop in enumerate(PROPS):
             self.send("observe_property", i, prop)
 
-    def send(self, *cmd):
-        self.sock.sendall(json.dumps({"command": cmd}).encode() + b"\n")
+    def send(self, *cmd, **fields):
+        """Run an mpv command; pass request_id=n to match its reply in events()."""
+        self.sock.sendall(json.dumps({"command": cmd, **fields}).encode() + b"\n")
 
     def set(self, prop, value):
         self.send("set_property", prop, value)

@@ -1,11 +1,11 @@
 # synthwave
 
 A tiny, vibey terminal radio for [Lofi Girl](https://www.youtube.com/@LofiGirl)'s live streams.
-One small Python package, no dependencies beyond the standard library, about 20 MB of memory
-and around 1% CPU while it animates.
+One small Python package with no dependencies beyond the standard library. The app itself uses
+about 20 MB of memory and around 1% CPU while it animates.
 
 ```
-  S Y N T H W A V E  lofi girl radio                                       ☾ 30m
+  ◓ synthwave                                                ☾ 30m   ↻ new quote
 
               “Not all those who wander are lost.”  — J.R.R. Tolkien
 
@@ -18,17 +18,19 @@ and around 1% CPU while it animates.
   synthwave   lofi   sleep   jazz   house   rainy   ambient   dark
 
   vol ━━━━━━━━━━━━━━━━━━──────── 75%                              01:24:09
-  space play/pause · ←/→ station · ↑/↓ volume · s sleep · m mute · q quit
+  space play · ←/→ station · ↑/↓ vol · s sleep · m mute · o settings · q quit
 ```
 
 ## Features
 
 - Eight Lofi Girl stations: synthwave, lofi, sleep, jazz, house, rainy, ambient and dark
-- Five seconds to pick a station at launch, then your last one starts on its own
+- A visualizer that follows the real audio (or a decorative one, or none)
+- A few seconds to pick a station at launch, then your last one starts on its own
 - Sleep timer (15, 30, 60 or 90 minutes)
 - Pauses when your laptop sleeps, so music doesn't blast when you open the lid
-- Remembers your station and volume
-- A new quote every couple of minutes
+- A settings menu for the visualizer, quotes, launch countdown and every key
+- Remembers your station, volume and settings
+- A new quote every couple of minutes, or whenever you click for one
 
 ## Install
 
@@ -45,31 +47,65 @@ From a clone: `uv tool install --editable .`, or run it in place with `python3 -
 
 ## Keys
 
+These are the defaults; every one of them can be changed in settings.
+
 | Key | Action |
 | --- | --- |
-| `space` / `p` | play or pause |
-| `enter` | play now (skips the launch countdown) |
-| `←` `→` / `1`–`8` | switch station |
-| `↑` `↓` / `+` `-` | volume |
+| `space` | play or pause |
+| `←` `→` | previous or next station |
+| `↑` `↓` | volume |
+| `n` | new quote (or click `↻ new quote`) |
 | `s` | cycle the sleep timer |
 | `m` | mute |
+| `o` | settings |
 | `q` | quit |
+
+`enter` (play now, skipping the countdown) and `1`–`8` (jump to a station) always work and
+can't be rebound. Clicking needs mouse reporting, which most terminals have on. In Warp it's a
+setting. While synthwave is open, hold Shift (Option in iTerm2) to select text.
+
+## Settings
+
+Press `o`. Use `↑` `↓` to pick a row, `←` `→` or `enter` to change it, and `esc` to close.
+Changes save as you make them.
+
+| Setting | Choices |
+| --- | --- |
+| visualizer | **real audio** (default), **decorative** or **off** |
+| new quote | every 1, 2 (default), 5 or 10 minutes, or never |
+| launch countdown | off, 3, 5 (default) or 10 seconds |
+| keys | select an action, press `enter`, then press the new key. If another action had that key, the two swap. `esc` cancels. |
+
+**real audio** bars show the music that's actually playing, split into 14 bands from deep bass
+on the left to treble on the right. Heights are measured against each stream's own recent
+loudness, so loud and quiet stations both fill the space. Measuring adds about 6% of one CPU
+core to mpv. **decorative** bars are layered sine waves that only follow play and pause, and
+they cost almost nothing.
 
 ## How it works
 
 synthwave runs a headless `mpv` and controls it over mpv's
-[JSON IPC socket](https://mpv.io/manual/stable/#json-ipc). The bars are decorative, not a real
-spectrum, so the app never touches the audio itself. Settings live in
-`$XDG_CONFIG_HOME/synthwave.json` (by default `~/.config/synthwave.json`).
+[JSON IPC socket](https://mpv.io/manual/stable/#json-ipc).
+
+For the real-audio visualizer, it adds an ffmpeg filter to mpv's audio chain. The filter copies
+the music into 14 extra channels, band-passes each one to its own frequency band, measures every
+channel's loudness, then mixes back down to plain stereo, so what you hear doesn't change. The
+app reads the levels about 30 times a second. Switching to decorative or off removes the filter.
+
+Settings live in `$XDG_CONFIG_HOME/synthwave.json` (by default `~/.config/synthwave.json`). You
+can edit the file by hand too. Anything invalid falls back to its default.
 
 | File | What it does |
 | --- | --- |
-| `synthwave/app.py` | player state, main loop, key bindings |
-| `synthwave/ui.py` | all drawing |
+| `synthwave/app.py` | player state, main loop, actions |
+| `synthwave/ui.py` | all drawing, including the settings panel, and mouse clicks |
+| `synthwave/settings.py` | settings menu rows and how keys change them |
+| `synthwave/keys.py` | rebindable actions and key names |
+| `synthwave/visualizer.py` | the audio filter, level meter and decorative wave |
 | `synthwave/mpv.py` | mpv process and IPC client |
+| `synthwave/config.py` | settings file: defaults, validation, saving |
 | `synthwave/stations.py` | station list |
 | `synthwave/quotes.py` | quote list |
-| `synthwave/config.py` | saved settings |
 
 ## Contributing
 

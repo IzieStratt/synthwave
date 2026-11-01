@@ -1,29 +1,35 @@
 """Player state, the main loop and key bindings."""
-import curses, random, re, time
+import random, re, time
 
-from . import config, ui
+from . import config, keys, settings, ui, visualizer
 from .mpv import Mpv
 from .quotes import QUOTES
 from .stations import STATIONS, url
 
-AUTOPLAY_DELAY = 5  # seconds to pick a station at launch before the current one starts
 SLEEP_STEPS = (0, 15, 30, 60, 90)  # sleep timer presets in minutes, 0 = off
-QUOTE_SECONDS = 120
 FRAME_MS, IDLE_MS = 33, 500  # ~30 fps while anything moves, otherwise barely wake up
 LIVE_STAMP = re.compile(r" \d{4}-\d\d-\d\d \d\d:\d\d$")  # yt-dlp appends the start time to live titles
+LEVELS = 1  # request id for visualizer level polls
 
 
 class App:
     def __init__(self):
         now = time.monotonic()
-        self.station, volume = config.load()
+        self.settings = config.load()
+        self.station, volume = self.settings["station"], self.settings["volume"]
+        self.bindings = keys.bindings(self.settings["keys"])
+        self.menu = None
         self.mpv = Mpv(volume)
+        if self.settings["visualizer"] == "audio":
+            self.mpv.send("af", "add", visualizer.FILTER)
         self.mpv.send("loadfile", url(self.station))  # buffers while paused, so autoplay starts instantly
         self.props = {"pause": True, "volume": volume, "mute": False, "media-title": "", "core-idle": True}
         self.banner = ""  # shown instead of the stream title; None once the stream has loaded
-        self.autoplay_at = now + AUTOPLAY_DELAY
+        self.autoplay_at = now + self.settings["countdown"]
         self.sleep_step, self.sleep_at = 0, None
         self.listened, self.energy, self.last = 0.0, 0.0, now
+        self.meter = visualizer.Meter()
+        self.bands = self.target = [0.0] * visualizer.BANDS  # shown and latest measured audio levels
         self.drift = time.time() - now
         self.quote = None
         self.new_quote(now)
@@ -44,6 +50,9 @@ class App:
         self.quote = random.choice([q for q in QUOTES if q != self.quote])
         self.quote_at = now
 
+    def save(self):
+        config.save(dict(self.settings, station=self.station, volume=self.volume))
+
     def play(self):
         self.autoplay_at = None
         self.mpv.set("pause", False)
@@ -56,10 +65,20 @@ class App:
         self.station = station % len(STATIONS)
         self.mpv.send("loadfile", url(self.station))
         if self.autoplay_at:
-            self.autoplay_at = now + AUTOPLAY_DELAY  # still choosing: wait for the dial to settle
+            self.autoplay_at = now + self.settings["countdown"]  # still choosing: wait for the dial to settle
         else:
             self.mpv.set("pause", False)
-        config.save(self.station, self.volume)
+        self.save()
+
+    def changed(self, setting):
+        """Apply a setting the menu just changed, then save."""
+        if setting == "visualizer":
+            self.mpv.send("af", "remove", "@" + visualizer.LABEL)  # no-op when it isn't there
+            if self.settings["visualizer"] == "audio":
+                self.mpv.send("af", "add", visualizer.FILTER)
+        elif setting == "keys":
+            self.bindings = keys.bindings(self.settings["keys"])
+        self.save()
 
     def tick(self, now):
         for ev in self.mpv.events():
@@ -73,6 +92,8 @@ class App:
                 self.banner = None
             elif kind == "end-file" and ev.get("reason") == "error":
                 self.banner = "stream unavailable, try another station"
+            elif ev.get("request_id") == LEVELS:
+                self.target = self.meter.heights(ev.get("data")) or [0.0] * visualizer.BANDS
 
         # monotonic time stops while the machine sleeps, so a jump against wall time means the lid was closed
         if time.time() - now - self.drift > 5:
@@ -89,32 +110,49 @@ class App:
         self.energy += (self.playing - self.energy) * min(1.0, dt * 4)  # bars ease in and out
         if self.energy < 0.001:
             self.energy = 0.0
-        if now - self.quote_at > QUOTE_SECONDS:
+        if self.settings["visualizer"] == "audio" and self.playing:
+            self.mpv.send("get_property", visualizer.PROPERTY, request_id=LEVELS)
+        rise, fall = min(1.0, dt * 25), min(1.0, dt * 6)  # snap up on a beat, settle down gently
+        self.bands = [b + (t - b) * (rise if t > b else fall) for b, t in zip(self.bands, self.target)]
+        minutes = self.settings["quote_minutes"]
+        if minutes and now - self.quote_at > minutes * 60:
             self.new_quote(now)
 
     def on_key(self, key, now):
         """Handle one key press; returns False to quit."""
-        if key in (ord("q"), ord("Q")):
+        if self.menu:
+            changed = self.menu.on_key(key)
+            if changed:
+                self.changed(changed)
+            if not self.menu.open:
+                self.menu = None
+            return True
+        action = self.bindings.get(key)
+        if action == "quit":
             return False
-        if key in (ord(" "), ord("p")):
+        if action == "play":
             if self.autoplay_at:
                 self.play()
             else:
                 self.mpv.send("cycle", "pause")
-        elif key in (curses.KEY_ENTER, 10, 13):
+        elif key in keys.ENTER:
             self.play()
-        elif key == ord("m"):
+        elif action == "mute":
             self.mpv.send("cycle", "mute")
-        elif key == ord("s"):
+        elif action == "quote":
+            self.new_quote(now)
+        elif action == "sleep":
             self.sleep_step = (self.sleep_step + 1) % len(SLEEP_STEPS)
             self.sleep_at = now + SLEEP_STEPS[self.sleep_step] * 60 if self.sleep_step else None
-        elif key in (curses.KEY_UP, curses.KEY_DOWN, ord("+"), ord("="), ord("-")):
-            volume = max(0, min(100, self.volume + (-5 if key in (curses.KEY_DOWN, ord("-")) else 5)))
+        elif action in ("louder", "quieter"):
+            volume = max(0, min(100, self.volume + (5 if action == "louder" else -5)))
             self.props["volume"] = volume  # update now so fast repeats don't read a stale value
             self.mpv.set("volume", volume)
-            config.save(self.station, volume)
-        elif key in (curses.KEY_LEFT, curses.KEY_RIGHT):
-            self.tune(self.station + (1 if key == curses.KEY_RIGHT else -1), now)
+            self.save()
+        elif action in ("prev", "next"):
+            self.tune(self.station + (1 if action == "next" else -1), now)
+        elif action == "settings":
+            self.menu = settings.Menu(self.settings)
         elif ord("1") <= key < ord("1") + len(STATIONS):
             self.tune(key - ord("1"), now)
         return True
@@ -126,8 +164,16 @@ class App:
                 now = time.monotonic()
                 self.tick(now)
                 scr.timeout(FRAME_MS if ui.draw(scr, self, now) else IDLE_MS)
-                if not self.on_key(scr.getch(), time.monotonic()):
+                key, now = scr.getch(), time.monotonic()
+                if key == keys.ESC:
+                    seq = ui.read_escape(scr)
+                    if seq:  # a mouse report, not the Esc key
+                        if ui.on_button(seq, scr.getmaxyx()[1]):
+                            self.new_quote(now)
+                        continue
+                if not self.on_key(key, now):
                     return None
             return f"synthwave: mpv exited ({self.mpv.proc.returncode})"
         finally:
+            ui.mouse(False)
             self.mpv.close()
