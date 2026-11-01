@@ -1,5 +1,5 @@
 """Player state, the main loop and key bindings."""
-import random, re, time
+import curses, random, re, sys, time
 
 from . import config, keys, settings, ui, visualizer
 from .mpv import Mpv
@@ -165,6 +165,8 @@ class App:
                 self.tick(now)
                 scr.timeout(FRAME_MS if ui.draw(scr, self, now) else IDLE_MS)
                 key, now = scr.getch(), time.monotonic()
+                if key == curses.KEY_RESIZE and sys.platform == "win32":
+                    curses.resize_term(0, 0)  # PDCurses only takes the new size when asked
                 if key == keys.ESC:
                     seq = ui.read_escape(scr)
                     if seq:  # a mouse report, not the Esc key

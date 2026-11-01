@@ -5,9 +5,21 @@ from . import keys, settings
 from .stations import STATIONS
 from .visualizer import sample, wave
 
-PALETTE = (199, 205, 213, 177, 141, 105, 75, 51)  # 256-colour hot pink -> cyan
-FALLBACK = (curses.COLOR_MAGENTA,) * 4 + (curses.COLOR_CYAN,) * 4  # for 8-colour terminals
-QUOTE_COLOR = 183  # lavender
+C = curses
+# Per station, in STATIONS order: 8-step 256-colour gradient (accent -> highlight), quote colour,
+# and the two colours used on 8-colour terminals.
+THEMES = (
+    ((199, 205, 213, 177, 141, 105, 75, 51), 183, (C.COLOR_MAGENTA, C.COLOR_CYAN)),  # synthwave
+    ((203, 209, 215, 221, 186, 150, 114, 79), 223, (C.COLOR_RED, C.COLOR_YELLOW)),  # lofi
+    ((99, 105, 111, 117, 75, 69, 63, 57), 153, (C.COLOR_BLUE, C.COLOR_CYAN)),  # sleep
+    ((130, 166, 172, 208, 214, 220, 221, 228), 222, (C.COLOR_YELLOW, C.COLOR_RED)),  # jazz
+    ((190, 154, 118, 82, 46, 48, 43, 37), 157, (C.COLOR_GREEN, C.COLOR_CYAN)),  # house
+    ((67, 68, 74, 110, 116, 152, 153, 159), 195, (C.COLOR_BLUE, C.COLOR_WHITE)),  # rainy
+    ((29, 35, 41, 48, 79, 115, 151, 157), 194, (C.COLOR_GREEN, C.COLOR_CYAN)),  # ambient
+    ((88, 124, 160, 196, 161, 125, 89, 53), 217, (C.COLOR_RED, C.COLOR_MAGENTA)),  # dark
+)
+PALETTE = THEMES[0][0]  # only its length is used
+theme_set = None  # station whose colours are currently initialised
 BLOCKS = " ▁▂▃▄▅▆▇█"
 LOGO, TITLE = "◓", "synthwave"  # a sun setting on the horizon
 BUTTON = "↻ new quote"  # top right, clickable
@@ -21,17 +33,28 @@ MENU_WIDTH = 46
 def setup():
     curses.curs_set(0)
     curses.use_default_colors()
-    rich = curses.COLORS >= 256
-    for i, c in enumerate(PALETTE if rich else FALLBACK):
-        curses.init_pair(i + 1, c, -1)
-    curses.init_pair(len(PALETTE) + 1, QUOTE_COLOR if rich else -1, -1)
-    curses.set_escdelay(25)  # a bare Esc shouldn't take a second to register
+    if hasattr(curses, "set_escdelay"):  # not in Windows' PDCurses, where Esc is instant anyway
+        curses.set_escdelay(25)  # a bare Esc shouldn't take a second to register
     mouse(True)
+
+
+def apply_theme(station):
+    """Recolour for a station; init_pair re-tints what's already on screen."""
+    global theme_set
+    palette, quote, basic = THEMES[station]
+    rich = curses.COLORS >= 256
+    for i, c in enumerate(palette if rich else (basic[0],) * 4 + (basic[1],) * 4):
+        curses.init_pair(i + 1, c, -1)
+    curses.init_pair(len(PALETTE) + 1, quote if rich else -1, -1)
+    theme_set = station
 
 
 def mouse(on):
     # SGR clicks (1006), parsed by on_button: the system curses on macOS only understands the old X10
-    # format, which some terminals (Warp) don't send and which breaks past column 223
+    # format, which some terminals (Warp) don't send and which breaks past column 223.
+    # Windows' PDCurses reads console events, not escape sequences, so clicking is off there.
+    if sys.platform == "win32":
+        return
     sys.stdout.write(f"\x1b[?1000;1006{'h' if on else 'l'}")
     sys.stdout.flush()
 
@@ -96,6 +119,8 @@ def status(app, now):
 
 def draw(scr, app, now):
     """Draw one frame; returns True while something is still animating."""
+    if theme_set != app.station:
+        apply_theme(app.station)
     h, w = scr.getmaxyx()
     W, n = max(0, w - 4), len(PALETTE)
     pink, cyan, dim, bold = color(0), color(n - 1), curses.A_DIM, curses.A_BOLD
