@@ -8,8 +8,8 @@ class Synthwave < Formula
   license "MIT"
   head "https://github.com/JosTheDude/synthwave.git", branch: "main"
 
-  depends_on "python@3.13"
   depends_on "mpv"
+  depends_on "python@3.13"
   depends_on "yt-dlp"
 
   def install
