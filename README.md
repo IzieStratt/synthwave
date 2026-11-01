@@ -38,6 +38,14 @@ You need [mpv](https://mpv.io) and [yt-dlp](https://github.com/yt-dlp/yt-dlp) on
 It runs on macOS and Linux.
 
 ```sh
+brew tap JosTheDude/synthwave https://github.com/JosTheDude/synthwave
+brew install synthwave         # pulls in mpv, yt-dlp and Python
+synthwave
+```
+
+Or without Homebrew:
+
+```sh
 brew install mpv yt-dlp        # or your distro's package manager
 uv tool install git+https://github.com/JosTheDude/synthwave   # or: pipx install git+https://github.com/JosTheDude/synthwave
 synthwave

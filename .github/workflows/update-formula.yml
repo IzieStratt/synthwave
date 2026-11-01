@@ -1,0 +1,49 @@
+name: Update Homebrew formula
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "Formula/**"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-formula
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Point the formula at the pushed commit
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          short="${SHA:0:7}"
+          sed -i -E \
+            -e "s|revision: \"[0-9a-f]{40}\"|revision: \"${SHA}\"|" \
+            -e "s|^  version \".*\"|  version \"0.1.0-${short}\"|" \
+            Formula/synthwave.rb
+
+      - name: Commit and push if changed
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/synthwave.rb
+          if git diff --cached --quiet; then
+            echo "Formula already up to date."
+            exit 0
+          fi
+          git commit -m "chore: update Homebrew formula to ${SHA:0:7} [skip ci]"
+          git push origin HEAD:main
